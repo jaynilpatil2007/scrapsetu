@@ -1,0 +1,379 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Language {
+  HI
+  MR
+  EN
+}
+
+enum LotStatus {
+  DRAFT
+  READY
+  MATCHING
+  PICKUP_REQUESTED
+  HANDED_OVER
+  COMPLETED
+  CANCELLED
+}
+
+enum AuthorizationStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  SUSPENDED
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  FAILED
+}
+
+enum PayoutStatus {
+  CREATED
+  PROCESSING
+  SUCCESS
+  FAILED
+  REVERSED
+}
+
+enum PriceSource {
+  RECYCLER_QUOTE
+  COMPLETED_TRANSACTION
+  ADMIN_ENTRY
+  FIELD_RESEARCH
+}
+
+model Collector {
+  id                String   @id @default(cuid())
+  preferredLanguage Language @default(HI)
+  operatingArea     String?
+
+  lots         Lot[]
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Material {
+  id          String  @id @default(cuid())
+  category    String
+  subcategory String?
+  description String?
+  unit        String  @default("kg")
+
+  lots              Lot[]
+  prices            PriceRecord[]
+  recyclerMaterials RecyclerMaterial[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([subcategory])
+}
+
+model Lot {
+  id        String @id @default(cuid())
+  lotNumber String @unique
+
+  collectorId String
+  materialId  String
+
+  collector Collector @relation(fields: [collectorId], references: [id])
+  material  Material  @relation(fields: [materialId], references: [id])
+
+  description String?
+  approxWeight Float
+  condition    String?
+  sourceType   String?
+
+  // AI classification
+  aiCategory       String?
+  aiSubcategory    String?
+  aiConfidence     Float?
+  aiModel          String?
+
+  // Collector-confirmed classification
+  confirmedCategory    String?
+  confirmedSubcategory String?
+
+  // AI/dynamic price estimation
+  estimatedMinValue Float?
+  estimatedMaxValue Float?
+
+  // Collection location
+  collectionLatitude  Float?
+  collectionLongitude Float?
+  collectionLocation  String?
+
+  status LotStatus @default(DRAFT)
+
+  images      LotImage[]
+  quotes      PriceQuote[]
+  transaction Transaction?
+  handover    Handover?
+  events      TraceabilityEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([collectorId])
+  @@index([materialId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model LotImage {
+  id  String @id @default(cuid())
+  url String
+
+  lotId String
+  lot   Lot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([lotId])
+}
+
+model Recycler {
+  id   String @id @default(cuid())
+  name String
+
+  // Facility
+  facilityLatitude  Float?
+  facilityLongitude Float?
+  address           String?
+  city              String?
+  state             String?
+
+  // Authorization
+  authorizationNumber String?
+  authorizationStatus AuthorizationStatus @default(PENDING)
+  authorizationExpiry DateTime?
+
+  // Contact
+  phone String?
+  email String?
+
+  // Pickup
+  pickupAvailable Boolean @default(false)
+  serviceRadiusKm Float?
+
+  materials    RecyclerMaterial[]
+  quotes       PriceQuote[]
+  transactions Transaction[]
+  handovers    Handover[]
+  prices       PriceRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([city])
+  @@index([state])
+  @@index([authorizationStatus])
+}
+
+model RecyclerMaterial {
+  id String @id @default(cuid())
+
+  recyclerId String
+  materialId String
+
+  recycler Recycler @relation(fields: [recyclerId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  offeredRate     Float
+  unit            String  @default("kg")
+  minQuantity     Float?
+  pickupAvailable Boolean @default(false)
+
+  @@unique([recyclerId, materialId])
+  @@index([materialId])
+}
+
+model PriceRecord {
+  id String @id @default(cuid())
+
+  materialId String
+  recyclerId String?
+
+  material Material  @relation(fields: [materialId], references: [id])
+  recycler Recycler? @relation(fields: [recyclerId], references: [id])
+
+  location String?
+  city     String?
+  state    String?
+
+  buyingPrice  Float
+  sellingPrice Float?
+  unit         String @default("kg")
+
+  sourceType PriceSource
+
+  recordedAt DateTime @default(now())
+
+  @@index([materialId, recordedAt])
+  @@index([city, materialId])
+}
+
+model PriceQuote {
+  id String @id @default(cuid())
+
+  lotId      String
+  recyclerId String
+
+  lot      Lot      @relation(fields: [lotId], references: [id])
+  recycler Recycler @relation(fields: [recyclerId], references: [id])
+
+  quotedPrice Float
+  quotedTotal Float?
+
+  expiresAt DateTime?
+
+  status String @default("ACTIVE")
+
+  createdAt DateTime @default(now())
+
+  @@index([lotId])
+  @@index([recyclerId])
+}
+
+model Transaction {
+  id String @id @default(cuid())
+
+  transactionNumber String @unique
+
+  lotId       String    @unique
+  collectorId String
+  recyclerId  String
+
+  lot       Lot       @relation(fields: [lotId], references: [id])
+  collector Collector @relation(fields: [collectorId], references: [id])
+  recycler  Recycler  @relation(fields: [recyclerId], references: [id])
+
+  // Pricing
+  quotedPrice Float?
+  finalPrice  Float
+
+  quotedWeight Float?
+  finalWeight  Float?
+
+  // Payment
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(PENDING)
+
+  collectionLocation String?
+  handoverLocation   String?
+
+  completedAt DateTime?
+
+  payout Payout?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([collectorId])
+  @@index([recyclerId])
+  @@index([paymentStatus])
+  handovers Handover[]
+}
+
+model Payout {
+  id String @id @default(cuid())
+
+  transactionId String @unique
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  amount Float
+  method PaymentMethod
+
+  // Cashfree/Razorpay/etc.
+  provider         String?
+  providerPayoutId String?
+
+  destinationType String? // UPI / BANK
+  destinationRef  String? // UPI ID / bank reference
+
+  status PayoutStatus @default(CREATED)
+
+  failureReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model Handover {
+  id String @id @default(cuid())
+
+  lotId         String @unique
+  transactionId String @unique
+  recyclerId    String
+
+  lot         Lot         @relation(fields: [lotId], references: [id])
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  recycler    Recycler    @relation(fields: [recyclerId], references: [id])
+
+  weight Float
+
+  latitude  Float?
+  longitude Float?
+
+  photoUrl String?
+
+  handoverReference String @unique
+  verificationHash  String
+
+  collectorConfirmedAt DateTime?
+  recyclerConfirmedAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([recyclerId])
+}
+
+model TraceabilityEvent {
+  id String @id @default(cuid())
+
+  lotId String
+  lot   Lot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  eventType String
+  actorType String
+  actorId   String?
+
+  latitude  Float?
+  longitude Float?
+
+  metadata Json?
+
+  previousHash String?
+  eventHash    String
+
+  createdAt DateTime @default(now())
+
+  @@index([lotId, createdAt])
+  @@index([eventType])
+}
