@@ -11,6 +11,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, { params }: RouteContext) {
+  console.log("🔥 PRICE ROUTE HIT");
   try {
     const user = await requireCurrentUser();
 
@@ -45,6 +46,8 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const pricing = await calculateLotPrice(lot.id);
 
+    console.log("pricing: ", pricing);
+
     const updatedLot = await prisma.lot.update({
       where: {
         id: lot.id,
@@ -56,6 +59,14 @@ export async function POST(request: Request, { params }: RouteContext) {
       include: {
         material: true,
       },
+    });
+
+    console.log("PRICE DEBUG", {
+      lotId: lot.id,
+      materialId: lot.materialId,
+      collectionLocation: lot.collectionLocation,
+      confirmedCategory: lot.confirmedCategory,
+      confirmedSubcategory: lot.confirmedSubcategory,
     });
 
     return NextResponse.json({

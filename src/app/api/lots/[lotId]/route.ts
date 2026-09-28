@@ -13,16 +13,17 @@ const UpdateLotSchema = z.object({
   confirmedCategory: z.string().min(1).optional(),
   confirmedSubcategory: z.string().optional(),
 
-  quantity: z.number().positive().optional(),
-  unit: z.string().optional(),
+  description: z.string().optional(),
+  approxWeight: z.number().positive().optional(),
+  condition: z.string().optional(),
+  sourceType: z.string().optional(),
 
   status: z
     .enum([
-      "CREATED",
-      "AI_CLASSIFIED",
-      "CONFIRMED",
+      "DRAFT",
+      "READY",
       "MATCHING",
-      "QUOTED",
+      "PICKUP_REQUESTED",
       "HANDED_OVER",
       "COMPLETED",
       "CANCELLED",
@@ -42,12 +43,22 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       include: {
         material: true,
         images: true,
-        transactions: {
+
+        transaction: {
           include: {
             payout: true,
           },
         },
-        traceabilityEvents: {
+
+        handover: true,
+
+        quotes: {
+          include: {
+            recycler: true,
+          },
+        },
+
+        events: {
           orderBy: {
             createdAt: "asc",
           },
@@ -111,11 +122,33 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       },
 
       data: {
-        confirmedCategory: input.confirmedCategory,
-        confirmedSubcategory: input.confirmedSubcategory,
-        quantity: input.quantity,
-        unit: input.unit,
-        status: input.status,
+        ...(input.confirmedCategory !== undefined && {
+          confirmedCategory: input.confirmedCategory,
+        }),
+
+        ...(input.confirmedSubcategory !== undefined && {
+          confirmedSubcategory: input.confirmedSubcategory,
+        }),
+
+        ...(input.description !== undefined && {
+          description: input.description,
+        }),
+
+        ...(input.approxWeight !== undefined && {
+          approxWeight: input.approxWeight,
+        }),
+
+        ...(input.condition !== undefined && {
+          condition: input.condition,
+        }),
+
+        ...(input.sourceType !== undefined && {
+          sourceType: input.sourceType,
+        }),
+
+        ...(input.status !== undefined && {
+          status: input.status,
+        }),
       },
 
       include: {
@@ -127,14 +160,16 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     await createTraceabilityEvent({
       lotId,
       eventType: "LOT_UPDATED",
+      actorType: "COLLECTOR",
       metadata: {
         confirmedCategory: input.confirmedCategory,
         confirmedSubcategory: input.confirmedSubcategory,
-        quantity: input.quantity,
-        unit: input.unit,
+        description: input.description,
+        approxWeight: input.approxWeight,
+        condition: input.condition,
+        sourceType: input.sourceType,
         status: input.status,
       },
-      actorType: ""
     });
 
     return NextResponse.json({

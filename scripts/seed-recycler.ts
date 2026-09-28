@@ -1,87 +1,77 @@
 import "dotenv/config";
 import { prisma } from "../src/lib/db/prisma";
 
+const RATE_MAP: Record<string, number> = {
+  PCB: 180,
+  CABLE: 120,
+  BATTERY: 90,
+  CRT: 35,
+  LCD: 80,
+  MOTOR: 110,
+  MAGNET: 150,
+  "MIXED PLASTIC": 30,
+  METAL: 55,
+  COMPUTER: 100,
+  MOBILE: 250,
+};
+
 async function main() {
-  const materialId = "cmuke9pd700003ouinmfbt6ds";
-
-  const recyclers = await prisma.recycler.createMany({
-    data: [
-      {
-        name: "Delhi Green Recycling",
-        facilityLatitude: 28.6139,
-        facilityLongitude: 77.209,
-        address: "Okhla Industrial Area",
-        city: "Delhi",
-        state: "Delhi",
-        authorizationNumber: "EWM-DEL-001",
-        authorizationStatus: "VERIFIED",
-        phone: "9876543210",
-        email: "contact@delhigreen.example",
-        pickupAvailable: true,
-        serviceRadiusKm: 30,
-      },
-      {
-        name: "EcoTech Recyclers",
-        facilityLatitude: 28.5355,
-        facilityLongitude: 77.391,
-        address: "Noida Sector 63",
-        city: "Noida",
-        state: "Uttar Pradesh",
-        authorizationNumber: "EWM-UP-002",
-        authorizationStatus: "VERIFIED",
-        phone: "9876543211",
-        email: "contact@ecotech.example",
-        pickupAvailable: true,
-        serviceRadiusKm: 40,
-      },
-      {
-        name: "Green Circuit Recycling",
-        facilityLatitude: 28.4595,
-        facilityLongitude: 77.0266,
-        address: "Gurugram Industrial Area",
-        city: "Gurugram",
-        state: "Haryana",
-        authorizationNumber: "EWM-HR-003",
-        authorizationStatus: "VERIFIED",
-        phone: "9876543212",
-        email: "contact@greencircuit.example",
-        pickupAvailable: true,
-        serviceRadiusKm: 50,
-      },
-    ],
-  });
-
-  console.log(`Created ${recyclers.count} recyclers`);
-
-  const createdRecyclers = await prisma.recycler.findMany({
+  const materials = await prisma.material.findMany();
+  const recyclers = await prisma.recycler.findMany({
     where: {
-      authorizationNumber: {
-        in: ["EWM-DEL-001", "EWM-UP-002", "EWM-HR-003"],
-      },
+      authorizationStatus: "VERIFIED",
     },
   });
 
-  await prisma.recyclerMaterial.createMany({
-    data: createdRecyclers.map((recycler) => ({
-      recyclerId: recycler.id,
-      materialId,
-      offeredRate:
-        recycler.name === "EcoTech Recyclers"
-          ? 480
-          : recycler.name === "Green Circuit Recycling"
-            ? 450
-            : 420,
-      unit: "kg",
-      minQuantity: 1,
-      pickupAvailable: true,
-    })),
-  });
+  console.log(`Materials: ${materials.length}`);
+  console.log(`Verified recyclers: ${recyclers.length}`);
 
-  console.log("Recycler material mappings created");
+  if (recyclers.length === 0) {
+    console.log("❌ No verified recyclers found.");
+    return;
+  }
+
+  for (const recycler of recyclers) {
+    for (const material of materials) {
+      const key = material.category.toUpperCase();
+
+      const offeredRate = RATE_MAP[key] ?? 75;
+
+      await prisma.recyclerMaterial.upsert({
+        where: {
+          recyclerId_materialId: {
+            recyclerId: recycler.id,
+            materialId: material.id,
+          },
+        },
+        update: {
+          offeredRate,
+          unit: material.unit,
+          pickupAvailable: recycler.pickupAvailable,
+        },
+        create: {
+          recyclerId: recycler.id,
+          materialId: material.id,
+          offeredRate,
+          unit: material.unit,
+          pickupAvailable: recycler.pickupAvailable,
+        },
+      });
+
+      console.log(
+        `✓ ${recycler.name} → ${material.category} → ₹${offeredRate}/${material.unit}`,
+      );
+    }
+  }
+
+  console.log("✅ RecyclerMaterial seeded");
 }
 
 main()
-  .catch(console.error)
+  .catch((error) => {
+    console.error("❌ Seed failed:", error);
+    process.exit(1);
+  })
   .finally(async () => {
     await prisma.$disconnect();
   });
