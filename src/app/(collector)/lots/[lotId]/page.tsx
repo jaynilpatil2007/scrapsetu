@@ -641,11 +641,6 @@ export default function LotDetailsPage() {
                       : "—"
                   }
                 />
-
-                <Info
-                  label="Model"
-                  value={lot.aiModel || "AI"}
-                />
               </div>
 
               {!lot.confirmedCategory ? (
@@ -1059,27 +1054,9 @@ export default function LotDetailsPage() {
                 <InputField
                   label="Handover photo URL (optional)"
                   type="text"
-                  placeholder="Cloudinary URL"
+                  placeholder="Global Image URL"
                   value={handoverPhotoUrl}
                   onChange={setHandoverPhotoUrl}
-                />
-
-                <InputField
-                  label="Latitude (optional)"
-                  type="number"
-                  step="any"
-                  placeholder="28.6139"
-                  value={handoverLatitude}
-                  onChange={setHandoverLatitude}
-                />
-
-                <InputField
-                  label="Longitude (optional)"
-                  type="number"
-                  step="any"
-                  placeholder="77.2090"
-                  value={handoverLongitude}
-                  onChange={setHandoverLongitude}
                 />
               </div>
 
@@ -1105,7 +1082,7 @@ export default function LotDetailsPage() {
 
         {/* PAYMENT */}
 
-        <section className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6">
+        {/* <section className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6">
           <SectionTitle
             number="06"
             title="Payment"
@@ -1255,7 +1232,7 @@ export default function LotDetailsPage() {
               </ActionButton>
             </div>
           )}
-        </section>
+        </section> */}
 
         {/* COMPLETION */}
 
